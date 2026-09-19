@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     {% load static %}
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <title>Exam Result - {{ course.name }}</title>
 </head>
 <body>
 
@@ -24,7 +25,7 @@
                     {% csrf_token %}
                     <div class="input-group">
                         <input type="text" class="form-control" placeholder="Username" name="username" >
-                        <input type="password" class="form-control" placeholder="Username" name="psw" >
+                        <input type="password" class="form-control" placeholder="Password" name="psw" >
                         <button class="btn btn-primary" type="submit">Login</button>
                         <a class="btn btn-link" href="{% url 'onlinecourse:registration' %}">Sign Up</a>
                     </div>
@@ -36,19 +37,69 @@
 </nav>
 
 <div class="container-fluid">
-    {% if grade > 80 %}
-    <div class="alert alert-success">
+    {% if grade >= 80 %}
+    <div class="alert alert-success mt-2">
        <!--HINT Display passed info -->
+       <h2>Congratulations, {{ user.first_name|default:user.username }}! You have passed the exam.</h2>
+       <p class="mb-0">Your score is <strong>{{ grade }}%</strong>
+          ({{ total_score }} out of {{ max_score }} points) for <strong>{{ course.name }}</strong>.</p>
     </div>
         {% else %}
-        <div class="alert alert-danger">
+        <div class="alert alert-danger mt-2">
             <!--HINT Display failed info -->
+            <h2>Sorry, you failed the exam.</h2>
+            <p class="mb-0">Your score is <strong>{{ grade }}%</strong>
+               ({{ total_score }} out of {{ max_score }} points). You need 80% or more to pass
+               <strong>{{ course.name }}</strong>. Please try again.</p>
         </div>
         <a class="btn btn-link text-danger" href="{% url 'onlinecourse:course_details' course.id %}">Re-test</a>
         {% endif %}
         <div class="card-columns-vertical mt-1">
         <h5 class="">Exam results</h5>
             <!--HINT Display exam results-->
+            {% for lesson in course.lesson_set.all %}
+                {% for question in lesson.question_set.all %}
+                    <div class="card mt-2 mb-3">
+                        <div class="card-header">
+                            <h5 class="mb-0">{{ question.question_text }}
+                                <span class="badge badge-secondary">{{ question.grade }} point{{ question.grade|pluralize }}</span>
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            {% for choice in question.choice_set.all %}
+                                {% if choice.id in selected_ids %}
+                                    {% if choice.is_correct %}
+                                        <p class="text-success mb-1">
+                                            <input type="checkbox" checked disabled>
+                                            {{ choice.choice_text }}
+                                            <span class="badge badge-success">Correct</span>
+                                        </p>
+                                    {% else %}
+                                        <p class="text-danger mb-1">
+                                            <input type="checkbox" checked disabled>
+                                            {{ choice.choice_text }}
+                                            <span class="badge badge-danger">Incorrect</span>
+                                        </p>
+                                    {% endif %}
+                                {% else %}
+                                    {% if choice.is_correct %}
+                                        <p class="text-success mb-1">
+                                            <input type="checkbox" disabled>
+                                            {{ choice.choice_text }}
+                                            <span class="badge badge-success">Correct answer (missed)</span>
+                                        </p>
+                                    {% else %}
+                                        <p class="text-muted mb-1">
+                                            <input type="checkbox" disabled>
+                                            {{ choice.choice_text }}
+                                        </p>
+                                    {% endif %}
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                    </div>
+                {% endfor %}
+            {% endfor %}
         </div>
     </div>
 </body>

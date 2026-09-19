@@ -1,7 +1,7 @@
 from django.shortcuts import render
 from django.http import HttpResponseRedirect
 # <HINT> Import any new Models here
-from .models import Course, Enrollment
+from .models import Course, Enrollment, Question, Choice, Submission
 from django.contrib.auth.models import User
 from django.shortcuts import get_object_or_404, render, redirect
 from django.urls import reverse
@@ -86,7 +86,7 @@ class CourseListView(generic.ListView):
 
 class CourseDetailView(generic.DetailView):
     model = Course
-    template_name = 'onlinecourse/course_detail_bootstrap.html'
+    template_name = 'onlinecourse/course_details_bootstrap.html'
 
 
 def enroll(request, course_id):
@@ -110,17 +110,36 @@ def enroll(request, course_id):
          # Collect the selected choices from exam form
          # Add each selected choice object to the submission object
          # Redirect to show_exam_result with the submission id
-#def submit(request, course_id):
+def submit(request, course_id):
+    # Get the course and the enrollment created when this user enrolled
+    course = get_object_or_404(Course, pk=course_id)
+    user = request.user
+    enrollment = get_object_or_404(Enrollment, user=user, course=course)
+
+    # Create a submission object referring to the enrollment
+    submission = Submission.objects.create(enrollment=enrollment)
+
+    # Collect the selected choices from the exam form and attach them.
+    # getlist is required here: the checkboxes all share the name "choice",
+    # so request.POST['choice'] would only ever return the last one.
+    submitted_answers = request.POST.getlist('choice')
+    submission.choices.set(Choice.objects.filter(id__in=submitted_answers))
+
+    # Redirect to show_exam_result with the course id and the submission id
+    return HttpResponseRedirect(reverse(viewname='onlinecourse:show_exam_result',
+                                        args=(course.id, submission.id)))
 
 
 # An example method to collect the selected choices from the exam form from the request object
+# Note: getlist is used instead of request.POST[key] so that every checked box of a
+# multi-answer question is collected, not just the last one.
 def extract_answers(request):
    submitted_anwsers = []
    for key in request.POST:
        if key.startswith('choice'):
-           value = request.POST[key]
-           choice_id = int(value)
-           submitted_anwsers.append(choice_id)
+           for value in request.POST.getlist(key):
+               choice_id = int(value)
+               submitted_anwsers.append(choice_id)
    return submitted_anwsers
 
 
@@ -130,7 +149,37 @@ def extract_answers(request):
         # Get the selected choice ids from the submission record
         # For each selected choice, check if it is a correct answer or not
         # Calculate the total score
-#def show_exam_result(request, course_id, submission_id):
+def show_exam_result(request, course_id, submission_id):
+    context = {}
+    # Get course and submission based on their ids
+    course = get_object_or_404(Course, pk=course_id)
+    submission = get_object_or_404(Submission, pk=submission_id)
+
+    # Get the selected choice ids from the submission record
+    selected_ids = [choice.id for choice in submission.choices.all()]
+
+    # For each question of the course, check whether it was answered correctly
+    # and add up the grade of every question the learner got right
+    questions = Question.objects.filter(lesson__course=course)
+    total_score = 0
+    max_score = 0
+    for question in questions:
+        max_score += question.grade
+        if question.is_get_score(selected_ids):
+            total_score += question.grade
+
+    # Express the score out of 100 so the template can check the 80% pass mark
+    if max_score > 0:
+        grade = int(total_score * 100 / max_score)
+    else:
+        grade = 0
+
+    context['course'] = course
+    context['selected_ids'] = selected_ids
+    context['grade'] = grade
+    context['total_score'] = total_score
+    context['max_score'] = max_score
+    return render(request, 'onlinecourse/exam_result_bootstrap.html', context)
 
 
 
